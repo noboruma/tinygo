@@ -10,7 +10,7 @@ import (
 var (
 	validBuildModeOptions     = []string{"default", "c-shared"}
 	validGCOptions            = []string{"none", "leaking", "conservative", "custom", "precise"}
-	validSchedulerOptions     = []string{"none", "tasks", "asyncify"}
+	validSchedulerOptions     = []string{"none", "tasks", "asyncify", "threads"}
 	validSerialOptions        = []string{"none", "uart", "usb", "rtt"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
