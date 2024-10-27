@@ -1,3 +1,5 @@
+//go:build !scheduler.threads
+
 package task
 
 // PMutex is a real mutex on systems that can be either preemptive or threaded,
