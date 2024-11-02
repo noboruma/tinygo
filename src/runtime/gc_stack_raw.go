@@ -4,6 +4,11 @@ package runtime
 
 import "internal/task"
 
+func gcMarkReachable() {
+	markStack()
+	findGlobals(markRoots)
+}
+
 // markStack marks all root pointers found on the stack.
 //
 // This implementation is conservative and relies on the stack top (provided by
