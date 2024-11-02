@@ -8,6 +8,11 @@ import (
 	"unsafe"
 )
 
+func gcMarkReachable() {
+	markStack()
+	findGlobals(markRoots)
+}
+
 //go:extern runtime.stackChainStart
 var stackChainStart *stackChainObject
 
