@@ -57,6 +57,7 @@ var (
 	gcMallocs     uint64         // total number of allocations
 	gcFrees       uint64         // total number of objects freed
 	gcFreedBlocks uint64         // total number of freed blocks
+	gcLock        task.PMutex    // lock to avoid race conditions on multicore systems
 )
 
 // zeroSizedAlloc is just a sentinel that gets returned when allocating 0 bytes.
@@ -317,6 +318,10 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		runtimePanicAt(returnAddress(0), "heap alloc in interrupt")
 	}
 
+	// Make sure there are no concurrent allocations. The heap is not currently
+	// designed for concurrent alloc/GC.
+	gcLock.Lock()
+
 	gcTotalAlloc += uint64(size)
 	gcMallocs++
 
@@ -399,6 +404,9 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 				i.setState(blockStateTail)
 			}
 
+			// We've claimed this allocation, now we can unlock the heap.
+			gcLock.Unlock()
+
 			// Return a pointer to this allocation.
 			pointer := thisAlloc.pointer()
 			if preciseHeap {
@@ -444,7 +452,9 @@ func free(ptr unsafe.Pointer) {
 
 // GC performs a garbage collection cycle.
 func GC() {
+	gcLock.Lock()
 	runGC()
+	gcLock.Unlock()
 }
 
 // runGC performs a garbage collection cycle. It is the internal implementation
@@ -713,6 +723,7 @@ func dumpHeap() {
 // The returned memory statistics are up to date as of the
 // call to ReadMemStats. This would not do GC implicitly for you.
 func ReadMemStats(m *MemStats) {
+	gcLock.Lock()
 	m.HeapIdle = 0
 	m.HeapInuse = 0
 	for block := gcBlock(0); block < endBlock; block++ {
@@ -732,6 +743,7 @@ func ReadMemStats(m *MemStats) {
 	m.Sys = uint64(heapEnd - heapStart)
 	m.HeapAlloc = (gcTotalBlocks - gcFreedBlocks) * uint64(bytesPerBlock)
 	m.Alloc = m.HeapAlloc
+	gcLock.Unlock()
 }
 
 func SetFinalizer(obj interface{}, finalizer interface{}) {
