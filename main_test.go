@@ -203,6 +203,13 @@ func TestBuild(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasip2", sema), tests, t)
 		})
+	} else if runtime.GOOS == "windows" {
+		if runtime.GOARCH != "386" {
+			t.Run("Windows386", func(t *testing.T) {
+				t.Parallel()
+				runPlatTests(optionsFromOSARCH("windows/386", sema), tests, t)
+			})
+		}
 	}
 }
 
