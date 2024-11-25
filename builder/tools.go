@@ -14,16 +14,45 @@ import (
 
 // runCCompiler invokes a C compiler with the given arguments.
 func runCCompiler(flags ...string) error {
+	// Find the right command to run Clang.
+	var cmd *exec.Cmd
 	if hasBuiltinTools {
 		// Compile this with the internal Clang compiler.
-		cmd := exec.Command(os.Args[0], append([]string{"clang"}, flags...)...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		cmd = exec.Command(os.Args[0], append([]string{"clang"}, flags...)...)
+	} else {
+		// Compile this with an external invocation of the Clang compiler.
+		name, err := LookupCommand("clang")
+		if err != nil {
+			return err
+		}
+		cmd = exec.Command(name, flags...)
 	}
 
-	// Compile this with an external invocation of the Clang compiler.
-	return execCommand("clang", flags...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Make sure the command doesn't use any environmental variables.
+	// Most importantly, it should not use C_INCLUDE_PATH and the like.
+	cmd.Env = []string{}
+
+	// Let some environment variables through. One important one is the
+	// temporary directory, especially on Windows it looks like Clang breaks if
+	// the temporary directory has not been set.
+	// See: https://github.com/tinygo-org/tinygo/issues/4557
+	// Also see: https://github.com/llvm/llvm-project/blob/release/18.x/llvm/lib/Support/Unix/Path.inc#L1435
+	for _, env := range os.Environ() {
+		// We could parse the key and look it up in a map, but since there are
+		// only a few keys iterating through them is easier and maybe even
+		// faster.
+		for _, prefix := range []string{"TMPDIR=", "TMP=", "TEMP=", "TEMPDIR="} {
+			if strings.HasPrefix(env, prefix) {
+				cmd.Env = append(cmd.Env, env)
+				break
+			}
+		}
+	}
+
+	return cmd.Run()
 }
 
 // link invokes a linker with the given name and flags.

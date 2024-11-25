@@ -48,6 +48,19 @@ entry:
   ret void
 }
 
+; Function Attrs: nounwind
+define hidden void @main.useGeneric(ptr %context) unnamed_addr #2 {
+entry:
+  call void @"main.noinlineGenericFunc[int8]"(ptr undef)
+  ret void
+}
+
+; Function Attrs: noinline nounwind
+define linkonce_odr hidden void @"main.noinlineGenericFunc[int8]"(ptr %context) unnamed_addr #5 {
+entry:
+  ret void
+}
+
 ; Function Attrs: noinline nounwind
 define hidden void @main.functionInSection(ptr %context) unnamed_addr #5 section ".special_function_section" {
 entry:
@@ -71,6 +84,14 @@ entry:
 }
 
 declare void @main.undefinedFunctionNotInSection(ptr) #1
+
+declare void @main.doesNotEscapeParam(ptr nocapture dereferenceable_or_null(4), ptr nocapture, i32, i32, ptr nocapture dereferenceable_or_null(36), ptr nocapture, ptr) #1
+
+; Function Attrs: nounwind
+define hidden void @main.stillEscapes(ptr dereferenceable_or_null(4) %a, ptr %b.data, i32 %b.len, i32 %b.cap, ptr dereferenceable_or_null(36) %c, ptr %d, ptr %context) unnamed_addr #2 {
+entry:
+  ret void
+}
 
 attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
 attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }

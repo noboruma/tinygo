@@ -7,6 +7,7 @@ package runtime
 
 import (
 	"reflect"
+	"tinygo"
 	"unsafe"
 )
 
@@ -21,14 +22,6 @@ type hashmap struct {
 	keyEqual   func(x, y unsafe.Pointer, n uintptr) bool
 	keyHash    func(key unsafe.Pointer, size, seed uintptr) uint32
 }
-
-type hashmapAlgorithm uint8
-
-const (
-	hashmapAlgorithmBinary hashmapAlgorithm = iota
-	hashmapAlgorithmString
-	hashmapAlgorithmInterface
-)
 
 // A hashmap bucket. A bucket is a container of 8 key/value pairs: first the
 // following two entries, then the 8 keys, then the 8 values. This somewhat odd
@@ -45,8 +38,11 @@ type hashmapIterator struct {
 	buckets      unsafe.Pointer // pointer to array of hashapBuckets
 	numBuckets   uintptr        // length of buckets array
 	bucketNumber uintptr        // current index into buckets array
+	startBucket  uintptr        // starting location for iterator
 	bucket       *hashmapBucket // current bucket in chain
 	bucketIndex  uint8          // current index into bucket
+	startIndex   uint8          // starting bucket index for iterator
+	wrapped      bool           // true if the iterator has wrapped
 }
 
 func hashmapNewIterator() unsafe.Pointer {
@@ -73,8 +69,8 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashm
 	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + keySize*8 + valueSize*8
 	buckets := alloc(bucketBufSize*(1<<bucketBits), nil)
 
-	keyHash := hashmapKeyHashAlg(hashmapAlgorithm(alg))
-	keyEqual := hashmapKeyEqualAlg(hashmapAlgorithm(alg))
+	keyHash := hashmapKeyHashAlg(tinygo.HashmapAlgorithm(alg))
+	keyEqual := hashmapKeyEqualAlg(tinygo.HashmapAlgorithm(alg))
 
 	return &hashmap{
 		buckets:    buckets,
@@ -116,13 +112,13 @@ func hashmapClear(m *hashmap) {
 	}
 }
 
-func hashmapKeyEqualAlg(alg hashmapAlgorithm) func(x, y unsafe.Pointer, n uintptr) bool {
+func hashmapKeyEqualAlg(alg tinygo.HashmapAlgorithm) func(x, y unsafe.Pointer, n uintptr) bool {
 	switch alg {
-	case hashmapAlgorithmBinary:
+	case tinygo.HashmapAlgorithmBinary:
 		return memequal
-	case hashmapAlgorithmString:
+	case tinygo.HashmapAlgorithmString:
 		return hashmapStringEqual
-	case hashmapAlgorithmInterface:
+	case tinygo.HashmapAlgorithmInterface:
 		return hashmapInterfaceEqual
 	default:
 		// compiler bug :(
@@ -130,13 +126,13 @@ func hashmapKeyEqualAlg(alg hashmapAlgorithm) func(x, y unsafe.Pointer, n uintpt
 	}
 }
 
-func hashmapKeyHashAlg(alg hashmapAlgorithm) func(key unsafe.Pointer, n, seed uintptr) uint32 {
+func hashmapKeyHashAlg(alg tinygo.HashmapAlgorithm) func(key unsafe.Pointer, n, seed uintptr) uint32 {
 	switch alg {
-	case hashmapAlgorithmBinary:
+	case tinygo.HashmapAlgorithmBinary:
 		return hash32
-	case hashmapAlgorithmString:
+	case tinygo.HashmapAlgorithmString:
 		return hashmapStringPtrHash
-	case hashmapAlgorithmInterface:
+	case tinygo.HashmapAlgorithmInterface:
 		return hashmapInterfacePtrHash
 	default:
 		// compiler bug :(
@@ -278,13 +274,26 @@ func hashmapInsertIntoNewBucket(m *hashmap, key, value unsafe.Pointer, tophash u
 }
 
 func hashmapGrow(m *hashmap) {
+	// allocate our new buckets twice as big
+	n := hashmapCopy(m, m.bucketBits+1)
+	*m = n
+}
+
+//go:linkname hashmapClone maps.clone
+func hashmapClone(intf _interface) _interface {
+	typ, val := decomposeInterface(intf)
+	m := (*hashmap)(val)
+	n := hashmapCopy(m, m.bucketBits)
+	return composeInterface(typ, unsafe.Pointer(&n))
+}
+
+func hashmapCopy(m *hashmap, sizeBits uint8) hashmap {
 	// clone map as empty
 	n := *m
 	n.count = 0
 	n.seed = uintptr(fastrand())
 
-	// allocate our new buckets twice as big
-	n.bucketBits = m.bucketBits + 1
+	n.bucketBits = sizeBits
 	numBuckets := uintptr(1) << n.bucketBits
 	bucketBufSize := hashmapBucketSize(m)
 	n.buckets = alloc(bucketBufSize*numBuckets, nil)
@@ -300,7 +309,7 @@ func hashmapGrow(m *hashmap) {
 		hashmapSet(&n, key, value, h)
 	}
 
-	*m = n
+	return n
 }
 
 // Get the value of a specified key, or zero the value if not found.
@@ -390,28 +399,44 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 		// initialize iterator
 		it.buckets = m.buckets
 		it.numBuckets = uintptr(1) << m.bucketBits
+		it.startBucket = uintptr(fastrand()) & (it.numBuckets - 1)
+		it.startIndex = uint8(fastrand() & 7)
+
+		it.bucketNumber = it.startBucket
+		it.bucket = hashmapBucketAddr(m, it.buckets, it.bucketNumber)
+		it.bucketIndex = it.startIndex
 	}
 
 	for {
+		// If we've wrapped and we're back at our starting location, terminate the iteration.
+		if it.wrapped && it.bucketNumber == it.startBucket && it.bucketIndex == it.startIndex {
+			return false
+		}
+
 		if it.bucketIndex >= 8 {
 			// end of bucket, move to the next in the chain
 			it.bucketIndex = 0
 			it.bucket = it.bucket.next
 		}
+
 		if it.bucket == nil {
+			it.bucketNumber++ // next bucket
 			if it.bucketNumber >= it.numBuckets {
-				// went through all buckets
-				return false
+				// went through all buckets -- wrap around
+				it.bucketNumber = 0
+				it.wrapped = true
 			}
 			it.bucket = hashmapBucketAddr(m, it.buckets, it.bucketNumber)
-			it.bucketNumber++ // next bucket
+			continue
 		}
+
 		if it.bucket.tophash[it.bucketIndex] == 0 {
 			// slot is empty - move on
 			it.bucketIndex++
 			continue
 		}
 
+		// Found a key.
 		slotKey := hashmapSlotKey(m, it.bucket, it.bucketIndex)
 		memcpy(key, slotKey, m.keySize)
 

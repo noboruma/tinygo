@@ -1,5 +1,8 @@
 //go:build tinygo.wasm && !wasm_unknown && !wasip2
 
+// This file is for wasm/wasip1 and for wasm/js, which both use much of the
+// WASIp1 API.
+
 package runtime
 
 import (
@@ -77,10 +80,15 @@ func abort() {
 
 //go:linkname syscall_Exit syscall.Exit
 func syscall_Exit(code int) {
-	// TODO: should we call __stdio_exit here?
-	// It's a low-level exit (syscall.Exit) so doing any libc stuff seems
-	// unexpected, but then where else should stdio buffers be flushed?
+	// Flush stdio buffers.
+	__stdio_exit()
+
+	// Exit the program.
 	proc_exit(uint32(code))
+}
+
+func mainReturnExit() {
+	syscall_Exit(0)
 }
 
 // TinyGo does not yet support any form of parallelism on WebAssembly, so these
@@ -104,3 +112,8 @@ func hardwareRand() (n uint64, ok bool) {
 //
 //export arc4random
 func libc_arc4random() uint32
+
+// int *__errno_location(void);
+//
+//export __errno_location
+func libc_errno_location() *int32

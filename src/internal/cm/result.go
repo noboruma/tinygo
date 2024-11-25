@@ -17,10 +17,22 @@ type BoolResult bool
 // Result represents a result sized to hold the Shape type.
 // The size of the Shape type must be greater than or equal to the size of OK and Err types.
 // For results with two zero-length types, use [BoolResult].
-type Result[Shape, OK, Err any] struct{ result[Shape, OK, Err] }
+type Result[Shape, OK, Err any] struct {
+	_ HostLayout
+	result[Shape, OK, Err]
+}
+
+// AnyResult is a type constraint for generic functions that accept any [Result] type.
+type AnyResult[Shape, OK, Err any] interface {
+	~struct {
+		_ HostLayout
+		result[Shape, OK, Err]
+	}
+}
 
 // result represents the internal representation of a Component Model result type.
 type result[Shape, OK, Err any] struct {
+	_     HostLayout
 	isErr bool
 	_     [0]OK
 	_     [0]Err
@@ -59,6 +71,16 @@ func (r *result[Shape, OK, Err]) Err() *Err {
 	return (*Err)(unsafe.Pointer(&r.data))
 }
 
+// Result returns (OK, zero value of Err, false) if r represents the OK case,
+// or (zero value of OK, Err, true) if r represents the error case.
+// This does not have a pointer receiver, so it can be chained.
+func (r result[Shape, OK, Err]) Result() (ok OK, err Err, isErr bool) {
+	if r.isErr {
+		return ok, *(*Err)(unsafe.Pointer(&r.data)), true
+	}
+	return *(*OK)(unsafe.Pointer(&r.data)), err, false
+}
+
 // This function is sized so it can be inlined and optimized away.
 func (r *result[Shape, OK, Err]) validate() {
 	var shape Shape
@@ -88,8 +110,8 @@ func (r *result[Shape, OK, Err]) validate() {
 
 // OK returns an OK result with shape Shape and type OK and Err.
 // Pass Result[OK, OK, Err] or Result[Err, OK, Err] as the first type argument.
-func OK[R ~struct{ result[Shape, OK, Err] }, Shape, OK, Err any](ok OK) R {
-	var r struct{ result[Shape, OK, Err] }
+func OK[R AnyResult[Shape, OK, Err], Shape, OK, Err any](ok OK) R {
+	var r Result[Shape, OK, Err]
 	r.validate()
 	r.isErr = ResultOK
 	*((*OK)(unsafe.Pointer(&r.data))) = ok
@@ -98,8 +120,8 @@ func OK[R ~struct{ result[Shape, OK, Err] }, Shape, OK, Err any](ok OK) R {
 
 // Err returns an error result with shape Shape and type OK and Err.
 // Pass Result[OK, OK, Err] or Result[Err, OK, Err] as the first type argument.
-func Err[R ~struct{ result[Shape, OK, Err] }, Shape, OK, Err any](err Err) R {
-	var r struct{ result[Shape, OK, Err] }
+func Err[R AnyResult[Shape, OK, Err], Shape, OK, Err any](err Err) R {
+	var r Result[Shape, OK, Err]
 	r.validate()
 	r.isErr = ResultErr
 	*((*Err)(unsafe.Pointer(&r.data))) = err

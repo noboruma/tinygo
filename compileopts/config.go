@@ -33,6 +33,17 @@ func (c *Config) CPU() string {
 	return c.Target.CPU
 }
 
+// The current build mode (like the `-buildmode` command line flag).
+func (c *Config) BuildMode() string {
+	if c.Options.BuildMode != "" {
+		return c.Options.BuildMode
+	}
+	if c.Target.BuildMode != "" {
+		return c.Target.BuildMode
+	}
+	return "default"
+}
+
 // Features returns a list of features this CPU supports. For example, for a
 // RISC-V processor, that could be "+a,+c,+m". For many targets, an empty list
 // will be returned.
@@ -320,6 +331,7 @@ func (c *Config) CFlags(libclang bool) []string {
 			"-isystem", filepath.Join(path, "include"),
 			"-isystem", filepath.Join(picolibcDir, "include"),
 			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
+			"-D__PICOLIBC_ERRNO_FUNCTION=__errno_location",
 		)
 	case "musl":
 		root := goenv.Get("TINYGOROOT")
@@ -329,6 +341,7 @@ func (c *Config) CFlags(libclang bool) []string {
 			"-nostdlibinc",
 			"-isystem", filepath.Join(path, "include"),
 			"-isystem", filepath.Join(root, "lib", "musl", "arch", arch),
+			"-isystem", filepath.Join(root, "lib", "musl", "arch", "generic"),
 			"-isystem", filepath.Join(root, "lib", "musl", "include"),
 		)
 	case "wasi-libc":
@@ -395,6 +408,8 @@ func (c *Config) LDFlags() []string {
 	if c.Target.LinkerScript != "" {
 		ldflags = append(ldflags, "-T", c.Target.LinkerScript)
 	}
+	ldflags = append(ldflags, c.Options.ExtLDFlags...)
+
 	return ldflags
 }
 

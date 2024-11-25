@@ -64,6 +64,7 @@
 package reflect
 
 import (
+	"internal/gclayout"
 	"internal/itoa"
 	"unsafe"
 )
@@ -423,8 +424,8 @@ type rawType struct {
 	meta uint8 // metadata byte, contains kind and flags (see constants above)
 }
 
-// All types that have an element type: named, chan, slice, array, map (but not
-// pointer because it doesn't have ptrTo).
+// All types that have an element type: named, chan, slice, array, map, interface
+// (but not pointer because it doesn't have ptrTo).
 type elemType struct {
 	rawType
 	numMethod uint16
@@ -436,6 +437,12 @@ type ptrType struct {
 	rawType
 	numMethod uint16
 	elem      *rawType
+}
+
+type interfaceType struct {
+	rawType
+	ptrTo *rawType
+	// TODO: methods
 }
 
 type arrayType struct {
@@ -961,6 +968,26 @@ func (t *rawType) Align() int {
 	}
 }
 
+func (r *rawType) gcLayout() unsafe.Pointer {
+	kind := r.Kind()
+
+	if kind < String {
+		return gclayout.NoPtrs
+	}
+
+	switch kind {
+	case Pointer, UnsafePointer, Chan, Map:
+		return gclayout.Pointer
+	case String:
+		return gclayout.String
+	case Slice:
+		return gclayout.Slice
+	}
+
+	// Unknown (for now); let the conservative pointer scanning handle it
+	return nil
+}
+
 // FieldAlign returns the alignment if this type is used in a struct field. It
 // is currently an alias for Align() but this might change in the future.
 func (t *rawType) FieldAlign() int {
@@ -971,6 +998,10 @@ func (t *rawType) FieldAlign() int {
 // of type u.
 func (t *rawType) AssignableTo(u Type) bool {
 	if t == u.(*rawType) {
+		return true
+	}
+
+	if t.underlying() == u.(*rawType).underlying() && (!t.isNamed() || !u.(*rawType).isNamed()) {
 		return true
 	}
 
@@ -1039,6 +1070,9 @@ func (t *rawType) NumMethod() int {
 		return int((*ptrType)(unsafe.Pointer(t)).numMethod)
 	case Struct:
 		return int((*structType)(unsafe.Pointer(t)).numMethod)
+	case Interface:
+		//FIXME: Use len(methods)
+		return (*interfaceType)(unsafe.Pointer(t)).ptrTo.NumMethod()
 	}
 
 	// Other types have no methods attached.  Note we don't panic here.
