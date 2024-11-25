@@ -8,10 +8,8 @@ import (
 )
 
 const (
-	LED             = GPIO25
 	_NUMBANK0_GPIOS = 48
 	_NUMBANK0_IRQS  = 6
-	xoscFreq        = 12 // Pico 2 Crystal oscillator Abracon ABM8-272-T3 frequency in MHz
 	rp2350ExtraReg  = 1
 	notimpl         = "rp2350: not implemented"
 	initUnreset     = rp.RESETS_RESET_ADC |
@@ -20,16 +18,6 @@ const (
 		rp.RESETS_RESET_UART0 |
 		rp.RESETS_RESET_UART1 |
 		rp.RESETS_RESET_USBCTRL
-)
-
-// UART pins
-const (
-	UART0_TX_PIN = GPIO0
-	UART0_RX_PIN = GPIO1
-	UART1_TX_PIN = GPIO8
-	UART1_RX_PIN = GPIO9
-	UART_TX_PIN  = UART0_TX_PIN
-	UART_RX_PIN  = UART0_RX_PIN
 )
 
 const (
