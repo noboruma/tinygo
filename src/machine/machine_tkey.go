@@ -37,34 +37,47 @@ func (p Pin) Set(high bool) {
 }
 
 type UART struct {
-	Bus    *tkey.UART_Type
-	Buffer *RingBuffer
+	Bus *tkey.UART_Type
 }
 
 var (
-	UART0  = &_UART0
-	_UART0 = UART{Bus: tkey.UART, Buffer: NewRingBuffer()}
+	DefaultUART = UART0
+	UART0       = &_UART0
+	_UART0      = UART{Bus: tkey.UART}
 )
 
+// Thw TKey UART is fixed at 62500 baud, 8N1.
 func (uart *UART) Configure(config UARTConfig) {
-	if config.BaudRate == 0 {
-		config.BaudRate = 115200
-	}
-
-	uart.SetBaudRate(config.BaudRate)
 }
 
 func (uart *UART) SetBaudRate(br uint32) {
-	uart.Bus.BIT_RATE.Set(uint16(18e6 / br))
 }
 
-func (uart *UART) writeByte(c byte) error {
+func (uart *UART) Write(data []byte) (n int, err error) {
+	for _, c := range data {
+		if err := uart.WriteByte(c); err != nil {
+			return n, err
+		}
+	}
+	return len(data), nil
+}
+
+func (uart *UART) WriteByte(c byte) error {
 	for uart.Bus.TX_STATUS.Get() == 0 {
 	}
 
-	uart.Bus.TX_DATA.Set(uint16(c))
+	uart.Bus.TX_DATA.Set(uint32(c))
 
 	return nil
 }
 
-func (uart *UART) flush() {}
+func (uart *UART) Buffered() int {
+	return int(uart.Bus.RX_BYTES.Get())
+}
+
+func (uart *UART) ReadByte() (byte, error) {
+	for uart.Bus.RX_STATUS.Get() == 0 {
+	}
+
+	return byte(uart.Bus.RX_DATA.Get()), nil
+}

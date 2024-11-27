@@ -76,22 +76,13 @@ type UDS_Type struct {
 }
 
 type UART_Type struct {
-	_         [40]byte
-	BIT_RATE  volatile.Register16
-	_         [2]byte
-	DATA_BITS volatile.Register16
-	_         [2]byte
-	STOP_BITS volatile.Register16
-	_         [58]byte
-	RX_STATUS volatile.Register16
-	_         [2]byte
-	RX_DATA   volatile.Register16
-	_         [2]byte
-	RX_BYTES  volatile.Register16
-	_         [16]byte
-	TX_STATUS volatile.Register16
-	_         [2]byte
-	TX_DATA   volatile.Register16
+	_         [128]byte
+	RX_STATUS volatile.Register32
+	RX_DATA   volatile.Register32
+	RX_BYTES  volatile.Register32
+	_         [116]byte
+	TX_STATUS volatile.Register32
+	TX_DATA   volatile.Register32
 }
 
 type TOUCH_Type struct {
