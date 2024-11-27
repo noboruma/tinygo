@@ -87,7 +87,7 @@ type UART_Type struct {
 
 type TOUCH_Type struct {
 	_      [36]byte
-	STATUS volatile.Register16
+	STATUS volatile.Register32
 }
 
 type TK1_Type struct {

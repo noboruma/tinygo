@@ -8,20 +8,37 @@ import (
 
 const deviceName = "TKey"
 
+// GPIO pins modes are only here to match the Pin interface.
+// The actual configuration is fixed in the hardware.
 const (
 	PinOutput PinMode = iota
+	PinInput
+	PinInputPullup
+	PinInputPulldown
 )
 
-var (
+const (
 	LED_BLUE  = Pin(tkey.TK1_MMIO_TK1_LED_B_BIT)
 	LED_GREEN = Pin(tkey.TK1_MMIO_TK1_LED_G_BIT)
 	LED_RED   = Pin(tkey.TK1_MMIO_TK1_LED_R_BIT)
 
 	LED = LED_GREEN
+
+	TKEY_TOUCH = Pin(3) // 3 is unused, but we need a value here to match the Pin interface.
+	BUTTON     = TKEY_TOUCH
 )
+
+var buttonConfig PinConfig
 
 // No config needed for TKey, just to match the Pin interface.
 func (p Pin) Configure(config PinConfig) {
+	switch p {
+	case BUTTON:
+		buttonConfig = config
+
+		// Clear any pending touch events.
+		tkey.TOUCH.STATUS.Set(0)
+	}
 }
 
 // Set GPIO pin to high or low.
@@ -34,6 +51,26 @@ func (p Pin) Set(high bool) {
 			tkey.TK1.LED.ClearBits(1 << uint(p))
 		}
 	}
+}
+
+func (p Pin) Get() bool {
+	switch p {
+	case BUTTON:
+		pushed := false
+		if tkey.TOUCH.STATUS.HasBits(1) {
+			tkey.TOUCH.STATUS.Set(0)
+			pushed = true
+		}
+
+		switch buttonConfig.Mode {
+		case PinInputPullup:
+			return !pushed
+		case PinInput, PinInputPulldown:
+			return pushed
+		}
+	}
+
+	return false
 }
 
 type UART struct {
