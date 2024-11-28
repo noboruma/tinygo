@@ -72,7 +72,8 @@ type TIMER_Type struct {
 }
 
 type UDS_Type struct {
-	DATA [8]volatile.Register16
+	_    [64]byte
+	DATA [8]volatile.Register32
 }
 
 type UART_Type struct {
@@ -91,9 +92,9 @@ type TOUCH_Type struct {
 }
 
 type TK1_Type struct {
-	NAME0         [4]volatile.Register8
-	NAME1         [4]volatile.Register8
-	VERSION       [4]volatile.Register8
+	NAME0         volatile.Register32
+	NAME1         volatile.Register32
+	VERSION       volatile.Register32
 	_             [16]byte
 	SWITCH_APP    volatile.Register32
 	_             [4]byte
@@ -102,10 +103,10 @@ type TK1_Type struct {
 	APP_ADDR      volatile.Register32
 	APP_SIZE      volatile.Register32
 	BLAKE2S       volatile.Register32
-	_             [56]byte
-	CDI_FIRST     [8]volatile.Register16
-	_             [38]byte
-	UDI_FIRST     [2]volatile.Register16
+	_             [72]byte
+	CDI_FIRST     [8]volatile.Register32
+	_             [32]byte
+	UDI_FIRST     [2]volatile.Register32
 	_             [62]byte
 	RAM_ADDR_RAND volatile.Register16
 	_             [2]byte
@@ -118,11 +119,9 @@ type TK1_Type struct {
 	_             [60]byte
 	SYSTEM_RESET  volatile.Register16
 	_             [66]byte
-	SPI_EN        volatile.Register16
-	_             [2]byte
-	SPI_XFER      volatile.Register16
-	_             [2]byte
-	SPI_DATA      volatile.Register16
+	SPI_EN        volatile.Register32
+	SPI_XFER      volatile.Register32
+	SPI_DATA      volatile.Register32
 }
 
 const (

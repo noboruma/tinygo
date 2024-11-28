@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/tkey"
+	"strconv"
 )
 
 const deviceName = "TKey"
@@ -125,4 +126,61 @@ func GetRNG() (uint32, error) {
 	}
 
 	return uint32(tkey.TRNG.ENTROPY.Get()), nil
+}
+
+// DesignName returns the FPGA design name.
+func DesignName() (string, string) {
+	n0 := tkey.TK1.NAME0.Get()
+	name0 := string([]byte{byte(n0 >> 24), byte(n0 >> 16), byte(n0 >> 8), byte(n0)})
+	n1 := tkey.TK1.NAME1.Get()
+	name1 := string([]byte{byte(n1 >> 24), byte(n1 >> 16), byte(n1 >> 8), byte(n1)})
+
+	return name0, name1
+}
+
+// DesignVersion returns the FPGA design version.
+func DesignVersion() string {
+	version := tkey.TK1.VERSION.Get()
+
+	return strconv.Itoa(int(version))
+}
+
+// CDI returns 8 words of Compound Device Identifier (CDI) generated and written by the firmware when the application is loaded.
+func CDI() []byte {
+	cdi := make([]byte, 32)
+	for i := 0; i < 8; i++ {
+		c := tkey.TK1.CDI_FIRST[i].Get()
+		cdi[i*4] = byte(c >> 24)
+		cdi[i*4+1] = byte(c >> 16)
+		cdi[i*4+2] = byte(c >> 8)
+		cdi[i*4+3] = byte(c)
+	}
+	return cdi
+}
+
+// UDI returns 2 words of Unique Device Identifier (UDI). Only available in firmware mode.
+func UDI() []byte {
+	udi := make([]byte, 8)
+	for i := 0; i < 2; i++ {
+		c := tkey.TK1.UDI_FIRST[i].Get()
+		udi[i*4] = byte(c >> 24)
+		udi[i*4+1] = byte(c >> 16)
+		udi[i*4+2] = byte(c >> 8)
+		udi[i*4+3] = byte(c)
+	}
+	return udi
+}
+
+// UDS returns 8 words of Unique Device Secret. Part of the FPGA design, changed when provisioning a TKey.
+// Only available in firmware mode. UDS is only readable once per power cycle.
+func UDS() []byte {
+	uds := make([]byte, 32)
+	for i := 0; i < 8; i++ {
+		c := tkey.UDS.DATA[i].Get()
+		uds[i*4] = byte(c >> 24)
+		uds[i*4+1] = byte(c >> 16)
+		uds[i*4+2] = byte(c >> 8)
+		uds[i*4+3] = byte(c)
+	}
+	return uds
 }
