@@ -5,6 +5,7 @@
 package runtime
 
 import (
+	"device/tkey"
 	"machine"
 	"runtime/volatile"
 )
@@ -21,6 +22,10 @@ func main() {
 
 // initPeripherals configures peripherals the way the runtime expects them.
 func initPeripherals() {
+	// prescaler value that results in 0.00001-second timer-ticks.
+	// given an 18 MHz processor, a millisecond is about 18,000 cycles.
+	tkey.TIMER.PRESCALER.Set(18_000_000 / 100000)
+
 	machine.InitSerial()
 }
 
@@ -49,12 +54,11 @@ func ticks() timeUnit {
 
 // sleepTicks sleeps for at least the duration d.
 func sleepTicks(d timeUnit) {
-	target := uint64(ticks() + d)
+	target := uint32(ticks() + d)
 
-	for {
-		if uint64(ticks()) >= target {
-			break
-		}
-		timestamp.Set(timestamp.Get() + 1)
+	tkey.TIMER.TIMER.Set(uint32(d))
+	tkey.TIMER.CTRL.SetBits(tkey.TK1_MMIO_TIMER_CTRL_START)
+	for tkey.TIMER.STATUS.Get() != 0 {
 	}
+	timestamp.Set(target)
 }

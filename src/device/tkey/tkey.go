@@ -63,10 +63,8 @@ type TRNG_Type struct {
 
 type TIMER_Type struct {
 	_         [32]byte
-	CTRL      volatile.Register16
-	_         [2]byte
-	STATUS    volatile.Register16
-	_         [2]byte
+	CTRL      volatile.Register32
+	STATUS    volatile.Register32
 	PRESCALER volatile.Register32
 	TIMER     volatile.Register32
 }
