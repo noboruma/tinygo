@@ -118,3 +118,11 @@ func (uart *UART) ReadByte() (byte, error) {
 
 	return byte(uart.Bus.RX_DATA.Get()), nil
 }
+
+// GetRNG returns 32 bits of cryptographically secure random data
+func GetRNG() (uint32, error) {
+	for tkey.TRNG.STATUS.Get() == 0 {
+	}
+
+	return uint32(tkey.TRNG.ENTROPY.Get()), nil
+}

@@ -56,9 +56,9 @@ const (
 
 type TRNG_Type struct {
 	_       [36]byte
-	STATUS  volatile.Register16
-	_       [108]byte
-	ENTROPY volatile.Register16
+	STATUS  volatile.Register32
+	_       [88]byte
+	ENTROPY volatile.Register32
 }
 
 type TIMER_Type struct {
