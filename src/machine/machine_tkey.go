@@ -85,12 +85,11 @@ var (
 )
 
 // Thw TKey UART is fixed at 62500 baud, 8N1.
-func (uart *UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) error {
+	return nil
 }
 
-func (uart *UART) SetBaudRate(br uint32) {
-}
-
+// Write a slice of data bytes to the UART.
 func (uart *UART) Write(data []byte) (n int, err error) {
 	for _, c := range data {
 		if err := uart.WriteByte(c); err != nil {
@@ -100,6 +99,7 @@ func (uart *UART) Write(data []byte) (n int, err error) {
 	return len(data), nil
 }
 
+// WriteByte writes a byte of data to the UART.
 func (uart *UART) WriteByte(c byte) error {
 	for uart.Bus.TX_STATUS.Get() == 0 {
 	}
@@ -109,15 +109,27 @@ func (uart *UART) WriteByte(c byte) error {
 	return nil
 }
 
+// Buffered returns the number of bytes buffered in the UART.
 func (uart *UART) Buffered() int {
 	return int(uart.Bus.RX_BYTES.Get())
 }
 
+// ReadByte reads a byte of data from the UART.
 func (uart *UART) ReadByte() (byte, error) {
 	for uart.Bus.RX_STATUS.Get() == 0 {
 	}
 
 	return byte(uart.Bus.RX_DATA.Get()), nil
+}
+
+// DTR is not available on the TKey.
+func (uart *UART) DTR() bool {
+	return false
+}
+
+// RTS is not available on the TKey.
+func (uart *UART) RTS() bool {
+	return false
 }
 
 // GetRNG returns 32 bits of cryptographically secure random data
