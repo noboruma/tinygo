@@ -27,22 +27,31 @@ const (
 
 	TKEY_TOUCH = Pin(3) // 3 is unused, but we need a value here to match the Pin interface.
 	BUTTON     = TKEY_TOUCH
+
+	GPIO1 = Pin(tkey.TK1_MMIO_TK1_GPIO1_BIT + 8)
+	GPIO2 = Pin(tkey.TK1_MMIO_TK1_GPIO2_BIT + 8)
+	GPIO3 = Pin(tkey.TK1_MMIO_TK1_GPIO3_BIT + 8)
+	GPIO4 = Pin(tkey.TK1_MMIO_TK1_GPIO4_BIT + 8)
 )
 
-var buttonConfig PinConfig
+var touchConfig, gpio1Config, gpio2Config PinConfig
 
 // No config needed for TKey, just to match the Pin interface.
 func (p Pin) Configure(config PinConfig) {
 	switch p {
 	case BUTTON:
-		buttonConfig = config
+		touchConfig = config
 
 		// Clear any pending touch events.
 		tkey.TOUCH.STATUS.Set(0)
+	case GPIO1:
+		gpio1Config = config
+	case GPIO2:
+		gpio2Config = config
 	}
 }
 
-// Set GPIO pin to high or low.
+// Set pin to high or low.
 func (p Pin) Set(high bool) {
 	switch p {
 	case LED_BLUE, LED_GREEN, LED_RED:
@@ -51,24 +60,44 @@ func (p Pin) Set(high bool) {
 		} else {
 			tkey.TK1.LED.ClearBits(1 << uint(p))
 		}
+	case GPIO3, GPIO4:
+		if high {
+			tkey.TK1.GPIO.SetBits(1 << uint(p-8))
+		} else {
+			tkey.TK1.GPIO.ClearBits(1 << uint(p-8))
+		}
 	}
 }
 
+// Get returns the current value of a pin.
 func (p Pin) Get() bool {
+	pushed := false
+	mode := PinInput
+
 	switch p {
 	case BUTTON:
-		pushed := false
+		mode = touchConfig.Mode
 		if tkey.TOUCH.STATUS.HasBits(1) {
 			tkey.TOUCH.STATUS.Set(0)
 			pushed = true
 		}
-
-		switch buttonConfig.Mode {
-		case PinInputPullup:
-			return !pushed
-		case PinInput, PinInputPulldown:
-			return pushed
+	case GPIO1:
+		mode = gpio1Config.Mode
+		if tkey.TK1.GPIO.HasBits(1 << uint(p-8)) {
+			pushed = true
 		}
+	case GPIO2:
+		mode = gpio2Config.Mode
+		if tkey.TK1.GPIO.HasBits(1 << uint(p-8)) {
+			pushed = true
+		}
+	}
+
+	switch mode {
+	case PinInputPullup:
+		return !pushed
+	case PinInput, PinInputPulldown:
+		return pushed
 	}
 
 	return false
