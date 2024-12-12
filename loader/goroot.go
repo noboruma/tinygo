@@ -45,7 +45,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	}
 
 	// Find the overrides needed for the goroot.
-	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()))
+	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()), needsNetTLSPackage(config.BuildTags()))
 
 	// Resolve the merge links within the goroot.
 	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides)
@@ -225,9 +225,20 @@ func needsSyscallPackage(buildTags []string) bool {
 	return false
 }
 
+// needsNetTLSPackage returns whether the net/ net/http crypto/tls package should be overridden
+// with the TinyGo version. This is the case on some targets.
+func needsNetTLSPackages(buildTags []string) bool {
+	for _, tag := range buildTags {
+		if tag == "netpoll" {
+			return false
+		}
+	}
+	return true
+}
+
 // The boolean indicates whether to merge the subdirs. True means merge, false
 // means use the TinyGo version.
-func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
+func pathsToOverride(goMinor int, needsSyscallPackage, needsNetTLSPackages bool) map[string]bool {
 	paths := map[string]bool{
 		"":                            true,
 		"crypto/":                     true,
@@ -259,6 +270,12 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"testing/":                    true,
 		"tinygo/":                     false,
 		"unique/":                     false,
+	}
+
+	if !needsNetTLSPackages {
+		delete(paths, "net/")
+		delete(paths, "net/http/")
+		delete(paths, "crypto/tls/")
 	}
 
 	if goMinor >= 19 {

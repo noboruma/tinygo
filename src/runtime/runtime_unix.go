@@ -513,3 +513,14 @@ func waitForEvents() {
 		runtimePanic("deadlocked: no event source")
 	}
 }
+
+// int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+//
+//export ppoll
+func ppoll(fds unsafe.Pointer, nfds uint, time unsafe.Pointer, signmask unsafe.Pointer) int32
+
+type pollfd struct {
+	fd      int32
+	events  int16
+	revents int16
+}
