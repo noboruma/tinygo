@@ -34,6 +34,9 @@ func abort()
 //export exit
 func exit(code int)
 
+//export close
+func libc_close(fd int32)
+
 //export raise
 func raise(sig int32)
 
@@ -512,4 +515,25 @@ func waitForEvents() {
 		// The program doesn't use signals, so this is a deadlock.
 		runtimePanic("deadlocked: no event source")
 	}
+}
+
+// int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+//
+//export ppoll
+func ppoll(fds unsafe.Pointer, nfds uint, time unsafe.Pointer, signmask unsafe.Pointer) int32
+
+type pollfd struct {
+	fd      int32
+	events  int16
+	revents int16
+}
+
+// int eventfd(unsigned int initval, int flags)
+//
+//export eventfd
+func eventfd(initval uint32, flags int) int32
+
+//go:linkname syscall_Close syscall.Close
+func syscall_close(fd int32) {
+	libc_close(fd)
 }

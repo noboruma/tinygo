@@ -1,3 +1,5 @@
+//go:build !netpoll
+
 package runtime
 
 // This file implements stub functions for internal/poll.

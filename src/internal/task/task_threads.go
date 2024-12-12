@@ -263,3 +263,8 @@ func tinygo_task_send_gc_signal(threadID)
 
 //export tinygo_task_current
 func tinygo_task_current() unsafe.Pointer
+
+//export tinygo_pause
+func pause() {
+	Pause()
+}

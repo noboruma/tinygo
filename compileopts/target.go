@@ -414,6 +414,15 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 			// proper threading.
 			spec.CFlags = append(spec.CFlags, "-mno-outline-atomics")
 		}
+		if options.GOARCH == "arm64" {
+			spec.ExtraFiles = append(spec.ExtraFiles,
+				"src/runtime/sys/arm64.c",
+			)
+		} else if options.GOARCH == "amd64" || options.GOARCH == "i386" {
+			spec.ExtraFiles = append(spec.ExtraFiles,
+				"src/runtime/sys/amd64.c",
+			)
+		}
 		spec.ExtraFiles = append(spec.ExtraFiles,
 			"src/internal/futex/futex_linux.c",
 			"src/internal/task/task_threads.c",

@@ -24,6 +24,12 @@ func run() {
 	callMain()
 }
 
+func InitShared() {
+	initHeap()
+	task.Init(stackTop)
+	initAll()
+}
+
 // Pause the current task for a given time.
 //
 //go:linkname sleep time.Sleep
