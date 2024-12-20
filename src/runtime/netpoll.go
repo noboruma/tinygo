@@ -27,10 +27,10 @@ const (
 )
 
 func after(t1, t2 timespec) bool {
-	if t1.sec > t2.sec {
+	if t1.tv_sec > t2.tv_sec {
 		return true
-	} else if t1.sec == t2.sec {
-		return t1.nsec > t2.nsec
+	} else if t1.tv_sec == t2.tv_sec {
+		return t1.tv_nsec > t2.tv_nsec
 	}
 	return false
 }
@@ -39,41 +39,31 @@ func after(t1, t2 timespec) bool {
 func poll_runtime_pollReset(pd *pollDesc, mode int) int {
 	println("reset", pd)
 
-	sec, nano, _ := now()
-	res := timespec{
-		tv_sec:  sec,
-		tv_nsec: nano,
-	}
-
 	switch mode {
 	case pollModeRead:
-		if after(res, pd.rDeadline) {
-			return pollErrTimeout
-		}
 	case pollModeWrite:
-		if after(res, pd.wDeadline) {
-			return pollErrTimeout
-		}
 	case pollModeWrite + pollModeRead:
-		if after(res, pd.rDeadline) {
-			return pollErrTimeout
-		}
-		if after(res, pd.wDeadline) {
-			return pollErrTimeout
-		}
 	}
 	return pollNoError
 }
 
 //go:linkname poll_runtime_pollWait internal/poll.runtime_pollWait
 func poll_runtime_pollWait(pd *pollDesc, mode int) int {
-	println("wait", pd)
+
+	sec, nano, _ := now()
+	now := timespec{
+		tv_sec:  sec,
+		tv_nsec: int64(nano),
+	}
 
 	var res int32
 	switch mode {
 	case pollModeRead:
-		tv := addToTimespec(pd.rDeadline)
-		fds := [...]pollfd{
+		println("rwait", pd.fd, pd.rDeadline.tv_sec-now.tv_sec)
+		if after(now, pd.rDeadline) {
+			return pollErrTimeout
+		}
+		fds := []pollfd{
 			pollfd{
 				fd:      pd.fd,
 				events:  pollIN,
@@ -85,11 +75,18 @@ func poll_runtime_pollWait(pd *pollDesc, mode int) int {
 			//	revents: 0,
 			//},
 		}
+		tv := timespec{
+			tv_sec: pd.rDeadline.tv_sec - now.tv_sec,
+		}
 		res = ppoll(unsafe.Pointer(&fds), uint(len(fds)), unsafe.Pointer(&tv), nil)
+		KeepAlive(fds)
+		KeepAlive(tv)
 	case pollModeWrite:
-		var tv timespec
-		addToTimespec(&tv, pd.wDeadline)
-		fds := [...]pollfd{
+		println("wwait", pd.fd, pd.wDeadline.tv_sec-now.tv_sec)
+		if after(now, pd.wDeadline) {
+			return pollErrTimeout
+		}
+		fds := []pollfd{
 			pollfd{
 				fd:      pd.fd,
 				events:  pollOUT,
@@ -101,7 +98,12 @@ func poll_runtime_pollWait(pd *pollDesc, mode int) int {
 			//	revents: 0,
 			//},
 		}
+		tv := timespec{
+			tv_sec: pd.wDeadline.tv_sec - now.tv_sec,
+		}
 		res = ppoll(unsafe.Pointer(&fds), uint(len(fds)), unsafe.Pointer(&tv), nil)
+		KeepAlive(fds)
+		KeepAlive(tv)
 	default:
 		println("should not happen")
 	}
@@ -111,28 +113,28 @@ func poll_runtime_pollWait(pd *pollDesc, mode int) int {
 	} else if res < 0 {
 		return pollErrNotPollable
 	}
+	println("ready")
 	return pollNoError
 }
 
 //go:linkname poll_runtime_pollSetDeadline internal/poll.runtime_pollSetDeadline
 func poll_runtime_pollSetDeadline(pd *pollDesc, d int64, mode int) {
 
-	sec, nano, _ := now()
-	res := timespec{
-		tv_sec:  sec,
-		tv_nsec: nano,
+	deadline := timespec{
+		tv_sec:  0,
+		tv_nsec: 0,
 	}
 
-	addToTimespec(&res, d)
+	addToTimespec(&deadline, d)
 
 	switch mode {
 	case pollModeRead:
-		pd.rDeadline = res
+		pd.rDeadline = deadline
 	case pollModeWrite:
-		pd.wDeadline = res
+		pd.wDeadline = deadline
 	case pollModeRead + pollModeWrite:
-		pd.rDeadline = res
-		pd.wDeadline = res
+		pd.rDeadline = deadline
+		pd.wDeadline = deadline
 	}
 }
 
@@ -144,10 +146,16 @@ func poll_runtime_pollOpen(fd uintptr) (*pollDesc, int) {
 		return nil, pollErrNotPollable
 	}
 	res := &pollDesc{
-		fd:        int32(fd),
-		unlockfd:  unlockfd,
-		rDeadline: 0,
-		wDeadline: 0,
+		fd:       int32(fd),
+		unlockfd: unlockfd,
+		rDeadline: timespec{
+			tv_sec:  1<<31 - 1,
+			tv_nsec: 1<<31 - 1,
+		},
+		wDeadline: timespec{
+			tv_sec:  1<<31 - 1,
+			tv_nsec: 1<<31 - 1,
+		},
 	}
 	println("open", res)
 	return res, pollNoError
@@ -163,14 +171,9 @@ func poll_runtime_pollClose(ctx uintptr) {
 	println("close", ctx)
 	pd := (*pollDesc)(unsafe.Pointer(ctx))
 
-	if pd.fd != 0 {
-		syscall_close(pd.fd)
-		pd.fd = 0
-	}
-
 	if pd.unlockfd != 0 {
 		syscall_close(pd.unlockfd)
-		pd.unlockfd = 0
+		pd.unlockfd = eventfd(0, 0)
 	}
 }
 
@@ -188,7 +191,7 @@ func addToTimespec(tv *timespec, nanoSec int64) {
 	tv.tv_nsec += nanoSec
 
 	if tv.tv_nsec >= 1000000000 {
-		tv.tv_sec += tv.tv_nsec / 1000000000 // Add whole seconds
-		tv.tv_nsec = tv.tv_nsec % 1000000000 // Keep the remainder as nanoseconds
+		tv.tv_sec += tv.tv_nsec / 1000000000
+		tv.tv_nsec = tv.tv_nsec % 1000000000
 	}
 }
